@@ -84,4 +84,4 @@ Enrollment is for people who agreed to be checked at the station. The store keep
 
 Real printer images are the next OCR test. The contour detector scores 1.00 F1 on synthetic rectangles; replace it with YOLO when real boxes are no longer simple geometry.
 
-Architecture, the experiment protocol, and UAT cases are in `docs/`. CV LaTeX is in `docs/cv.tex`.
+Architecture, the experiment protocol, and UAT cases are in `docs/`.
