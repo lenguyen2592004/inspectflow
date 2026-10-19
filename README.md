@@ -1,43 +1,40 @@
 # InspectFlow
 
-Cổng kiểm tra chất lượng bằng camera tại một trạm dây chuyền. Hệ thống đếm sản phẩm, phân loại lỗi xước, đọc mã lệnh sản xuất, xác thực người vận hành đã đăng ký, rồi đẩy phiếu kiểm tra sang ERP.
+Camera quality gate for one production-line station. It counts parts, classifies scratches, reads the work-order code, checks an enrolled operator, and posts a quality-inspection document to an ERP-style API.
 
-Bản này là đường chạy tái lập được: dữ liệu synthetic, baseline OpenCV, CNN PyTorch nhỏ, API, Docker, nhật ký thí nghiệm, SOP và kịch bản UAT. Model lớn hơn gắn vào cùng schema khi có ảnh line thật.
+The runnable path is reproducible: synthetic frames, an OpenCV detector, a small PyTorch CNN, a REST API, Docker, experiment logs, SOPs, and a UAT checklist. Swap in a larger model later without changing the inspection schema.
 
-## Khớp với công việc
+## Layout
 
-| Việc cần làm | Chỗ trong project |
+| Piece | Where |
 | --- | --- |
-| Xử lý ảnh và video | `StationPipeline.inspect_frame`, `inspect_frames` lấy trung vị số lượng |
-| Face recognition | `src/inspectflow/cv/face.py`, enroll embedding, API `/operators` |
-| Object detection và đếm | `src/inspectflow/cv/detection.py` |
-| Image classification | `DefectCNN` và script huấn luyện |
-| Chuẩn bị dữ liệu, tăng cường | `data/synthetic.py`, `data/augment.py`, quy ước nhãn trong `docs/experiment-protocol.md` |
-| Huấn luyện, đánh giá, tối ưu | `scripts/train_defect_classifier.py`, precision/recall/F1, latency |
-| Tích hợp ứng dụng, server, edge | FastAPI, `Dockerfile`, `scripts/export_onnx.py` |
-| OCR | `src/inspectflow/cv/ocr.py` cho font cố định của máy in line |
-| LLM / RAG / chatbot | `src/inspectflow/rag/assistant.py` trên SOP trong `docs/corpus` |
-| Git, REST, Docker | repo này, `/api/v1`, `docker-compose.yml` |
-| Ghi thí nghiệm để làm lại | `experiments/runs.jsonl`, `experiments/inspections.jsonl` |
-| ERP, UAT, đào tạo, bàn giao | `docs/uat-and-delivery.md`, phiếu `ErpInspection` |
+| Image and video | `StationPipeline.inspect_frame`; `inspect_frames` takes the median count |
+| Face verification | `src/inspectflow/cv/face.py`, enrollment embeddings, `/api/v1/operators` |
+| Object detection and counting | `src/inspectflow/cv/detection.py` |
+| Image classification | `DefectCNN` and `scripts/train_defect_classifier.py` |
+| Data, labels, augmentation | `data/synthetic.py`, `data/augment.py`, `docs/experiment-protocol.md` |
+| Train, evaluate, export | precision / recall / F1, latency, `scripts/evaluate.py`, `scripts/export_onnx.py` |
+| Server and edge | FastAPI, `Dockerfile`, ONNX export |
+| OCR | `src/inspectflow/cv/ocr.py` for a fixed line-printer font |
+| SOP chatbot | `src/inspectflow/rag/assistant.py` over `docs/corpus` |
+| Experiment log | `experiments/runs.jsonl`, `experiments/inspections.jsonl` |
+| ERP handoff and UAT | `ErpInspection`, `docs/uat-and-delivery.md` |
 
-## Luồng nghiệp vụ
+## Station flow
 
-1. ERP có work order với số lượng cần qua trạm `LINE-A-QC-01`.
-2. Camera chụp pallet hoặc đoạn băng chuyền.
-3. Pipeline đếm, tìm xước, đọc mã `WO-...`, nhận người vận hành nếu trạm bật bước này.
-4. Quyết định:
-   - `reject` khi có lỗi xước
-   - `review` khi lệch số lượng, lệch mã lệnh, hoặc người chưa xác thực
-   - `accept` khi các tín hiệu đã cấp đều khớp
-5. API ghi phiếu và trả document cho phân hệ chất lượng.
-6. Ca planner sửa quyết định được ghi lại để gắn nhãn vòng sau.
+1. ERP sends a work order and the quantity due at station `LINE-A-QC-01`.
+2. The camera captures a pallet or a short belt clip.
+3. The pipeline counts parts, looks for scratches, reads a `WO-...` code, and can require an enrolled operator.
+4. Decision:
+   - `reject` when any part is scratched
+   - `review` when the count, the work-order code, or the operator check disagrees
+   - `accept` when every supplied signal matches
+5. The API stores the inspection and returns the ERP document.
+6. A planner override is the labeling source for the next training round.
 
-Chatbot chỉ trả lời quy trình từ SOP và kèm file nguồn. Quyết định lô không đi qua chatbot.
+The chatbot answers only from station SOPs and returns a source citation. It does not decide the lot.
 
-## Chạy
-
-Trên máy này `python` chưa có trên PATH. Dùng `py -3`.
+## Run
 
 ```powershell
 py -3 -m venv .venv
@@ -50,39 +47,41 @@ python scripts/export_onnx.py
 uvicorn inspectflow.api.main:app --app-dir src --reload
 ```
 
+On macOS or Linux, create the environment with `python3 -m venv .venv` and activate `.venv/bin/activate`.
+
 Docker:
 
 ```powershell
 docker compose up --build
 ```
 
-Sau khi API chạy, `GET /health` và `POST /api/v1/chat` với câu trong SOP. Ảnh đưa vào `POST /api/v1/inspections/frame`.
+After the API is up, `GET /health` and `POST /api/v1/chat` with a question from the SOP. Send a frame to `POST /api/v1/inspections/frame`.
 
-## Kết quả held-out
+## Held-out results
 
-Tập đo không trùng seed huấn luyện (train `100–179`, đo từ `1000`). Nhiễu camera gồm blur 3×3, hệ số sáng 0.85–1.15, lệch ±12 và hạt σ = 3. Số liệu nằm ở `results/benchmark.json`. Chạy lại bằng `python scripts/evaluate.py`.
+Evaluation seeds start at `1000`. Training used seeds `100–179`. Camera noise is a 3×3 blur, gain 0.85–1.15, bias ±12, and grain σ = 3. Figures are in `results/benchmark.json`. Regenerate them with `python scripts/evaluate.py`.
 
-| Chỉ số | Ảnh sạch (80 frame) | Có nhiễu camera (80 frame) |
+| Metric | Clean (80 frames) | Camera noise (80 frames) |
 | --- | --- | --- |
 | Detection F1 @ IoU 0.5 | 1.00 | 1.00 |
-| Đếm đúng số lượng | 1.00 | 1.00 |
-| OCR đúng nguyên mã lệnh | 1.00 | 0.638 |
-| Macro F1 lỗi xước | 1.00 | 0.888 |
-| Đúng quyết định accept / reject / review | 1.00 | 0.75 |
-| Latency trung vị | 10.6 ms | 9.9 ms |
+| Exact count | 1.00 | 1.00 |
+| Work-order OCR exact match | 1.00 | 0.638 |
+| Scratch macro-F1 | 1.00 | 0.888 |
+| Lot decision accuracy | 1.00 | 0.75 |
+| Median latency | 10.6 ms | 9.9 ms |
 
-Đếm trên video (trung vị 5 frame, 30 đoạn, một frame bị cụt): 30/30 đúng.
+Video counting uses the median of five frames. On 30 clips with one partial frame, 30/30 counts were exact.
 
-Xác thực người vận hành, 12 danh tính đã enroll, 132 cặp impostor, ngưỡng cosine 0.90: TAR 1.00 tại FAR 0.00 (genuine thấp nhất 0.993, impostor cao nhất 0.831).
+Operator verification on 12 enrolled identities and 132 impostor pairs, cosine threshold 0.90: TAR 1.00 at FAR 0.00 (lowest genuine score 0.993, highest impostor score 0.831).
 
-Các con số này là trên ảnh synthetic cùng renderer với pipeline, chưa phải footage nhà máy. OCR là khối tụt khi có nhiễu, và quyết định lô tụt theo OCR.
+These figures are on synthetic frames from the same renderer as the pipeline, not on factory footage. Under noise, OCR is the module that drops, and the lot decision drops with it.
 
-## Nhận diện khuôn mặt
+## Operator verification
 
-Dùng cho người vận hành đã đồng ý, tại trạm. Lưu vector đặc trưng, không lưu ảnh. Baseline là HOG và cosine similarity để đo ngưỡng trên tập enroll nhỏ. Bước nghiên cứu tiếp theo là ArcFace hoặc FaceNet, giữ nguyên API enroll/verify.
+Enrollment is for people who agreed to be checked at the station. The store keeps an embedding, not the photo. The baseline is an aligned-crop descriptor with cosine similarity. ArcFace or FaceNet can replace the embedder without changing the enroll and verify API.
 
-## Việc tiếp khi có ảnh line
+## Next measurement
 
-OCR đang kéo quyết định lô xuống 0.75 khi có nhiễu. Ảnh máy in thật là phép đo kế tiếp. Detector contour giữ F1 1.00 trên hình chữ nhật synthetic; đổi sang YOLO khi box thật không còn là hình học đơn giản.
+Real printer images are the next OCR test. The contour detector scores 1.00 F1 on synthetic rectangles; replace it with YOLO when real boxes are no longer simple geometry.
 
-Chi tiết kiến trúc, nhật ký và UAT nằm trong `docs/`. Mục LaTeX để dán vào CV nằm ở `docs/cv.tex`.
+Architecture, the experiment protocol, and UAT cases are in `docs/`. CV LaTeX is in `docs/cv.tex`.
