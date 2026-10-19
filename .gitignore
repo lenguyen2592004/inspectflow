@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+mlruns/
+artifacts/
+data/generated/
+data/enrollments/*.json
+experiments/*.jsonl
+.DS_Store
+*.onnx

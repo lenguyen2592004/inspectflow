@@ -1,0 +1,31 @@
+station_id: LINE-A-QC-01
+detector:
+  name: opencv-contour
+  version: "1.0.0"
+  min_area: 2500
+  max_area: 200000
+classifier:
+  name: defect-cnn
+  version: "0.1.0"
+  weights: artifacts/defect_cnn.pt
+  image_size: 64
+  # Used when weights are not trained yet.
+  scratch_edge_threshold: 80.0
+ocr:
+  name: template-glyph
+  version: "1.0.0"
+  font_scale: 1.0
+  thickness: 2
+face:
+  name: hog-cosine
+  version: "1.0.0"
+  threshold: 0.9
+  enrollment_dir: data/enrollments
+video:
+  sample_every_n_frames: 5
+experiments:
+  runs_path: experiments/runs.jsonl
+  inspections_path: experiments/inspections.jsonl
+rag:
+  corpus_dir: docs/corpus
+  top_k: 3

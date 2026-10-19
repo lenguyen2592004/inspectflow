@@ -1,0 +1,42 @@
+{
+  "dataset": "synthetic line frames, held-out seeds 1000+ (train used 100-179)",
+  "classifier": "defect-cnn-0.1.0",
+  "detector": "opencv-contour-1.0.0",
+  "clean": {
+    "frames": 80.0,
+    "detection_precision_iou50": 1.0,
+    "detection_recall_iou50": 1.0,
+    "detection_f1_iou50": 1.0,
+    "count_exact_match": 1.0,
+    "ocr_exact_match": 1.0,
+    "decision_accuracy": 1.0,
+    "defect_f1_macro": 1.0,
+    "defect_accuracy": 1.0,
+    "latency_ms_median": 10.569699999905424
+  },
+  "camera_noise": {
+    "frames": 80.0,
+    "detection_precision_iou50": 1.0,
+    "detection_recall_iou50": 1.0,
+    "detection_f1_iou50": 1.0,
+    "count_exact_match": 1.0,
+    "ocr_exact_match": 0.6375,
+    "decision_accuracy": 0.75,
+    "defect_f1_macro": 0.8884985207100592,
+    "defect_accuracy": 0.9402985074626866,
+    "latency_ms_median": 9.860899999694084
+  },
+  "video": {
+    "video_count_exact_match": 1.0,
+    "video_trials": 30.0
+  },
+  "operator_verification": {
+    "identities": 12.0,
+    "impostor_pairs": 132.0,
+    "tar": 1.0,
+    "far": 0.0,
+    "genuine_min": 0.9929551482200623,
+    "impostor_max": 0.8307356238365173,
+    "threshold": 0.9
+  }
+}
